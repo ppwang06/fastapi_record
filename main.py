@@ -3,6 +3,21 @@ import platform
 from fastapi import FastAPI
 from typing import Union, Dict
 from pydantic import BaseModel
+from fastapi.requests import Request
+from slowapi.errors import RateLimitExceeded
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+
+# 关闭文档显示
+app = FastAPI(docs_url=None, redoc_url=None)
+
+
+# 实例化一个limiter对象，根据客户端地址进行限速
+limiter = Limiter(key_func=get_remote_address)
+# 指定FastApi的限速器为limiter
+app.state.limiter = limiter
+# 指定FastApi的异常拦截器
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 class Response(BaseModel):
@@ -11,12 +26,9 @@ class Response(BaseModel):
     msg: str
 
 
-# 关闭文档显示
-app = FastAPI(docs_url=None, redoc_url=None)
-
-
 @app.get("/")
-async def root():
+@limiter.limit("10/minute")
+async def root(request: Request):
     res = Response(code=0, result="这只是一个个人首页", msg="success")
     return res
 
